@@ -38,7 +38,7 @@ public class ClassLoader implements InterfaceClassLoader {
 	@Override
 	public Set<Class<?>> loadClasses(InterfaceXMLParser xml)
 			throws ClassNotFoundException {
-		HashSet<Class<?>> toReturn = new HashSet<>();
+		HashSet<Class<?>> toReturn = new HashSet<Class<?>>();
 		for (InterfaceNodeIdentifier node : xml.listIdetifiers()) {
 			toReturn.add(loadClass(node));
 		}

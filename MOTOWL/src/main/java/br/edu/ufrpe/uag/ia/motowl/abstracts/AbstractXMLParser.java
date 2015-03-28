@@ -41,7 +41,7 @@ public abstract class AbstractXMLParser implements InterfaceXMLParser {
 
 	@Override
 	public Set<InterfaceNodeIdentifier> listIdetifiers() {
-		HashSet<InterfaceNodeIdentifier> toReturn = new HashSet<>();
+		HashSet<InterfaceNodeIdentifier> toReturn = new HashSet<InterfaceNodeIdentifier>();
 		for (Entry<Object, Object> toAdd : xmls.entrySet()) {
 			toReturn.add(new Node(toAdd.getKey().toString(), toAdd.getValue()
 					.toString()));
