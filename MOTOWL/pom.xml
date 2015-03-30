@@ -32,7 +32,6 @@
       <groupId>com.github.ansell.owlapi</groupId>
       <artifactId>owlapi-impl</artifactId>
       <version>3.4.9.2-ansell</version>
-      <scope>test</scope>
       <type>jar</type>
     </dependency>
   </dependencies>
