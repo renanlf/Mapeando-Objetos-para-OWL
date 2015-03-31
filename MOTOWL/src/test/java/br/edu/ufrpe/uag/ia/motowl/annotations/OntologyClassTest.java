@@ -5,6 +5,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.util.HashSet;
 
 import junit.framework.Assert;
 
@@ -32,6 +33,7 @@ import org.semanticweb.owlapi.model.OWLOntologyManager;
 import org.semanticweb.owlapi.model.OWLOntologyManagerFactory;
 import org.semanticweb.owlapi.model.OWLOntologyStorageException;
 import org.semanticweb.owlapi.model.OWLOntologyStorerFactoryRegistry;
+import org.semanticweb.owlapi.model.OWLSubClassOfAxiom;
 import org.semanticweb.owlapi.model.PrefixManager;
 import org.semanticweb.owlapi.util.DefaultPrefixManager;
 import org.semanticweb.owlapi.vocab.PrefixOWLOntologyFormat;
@@ -40,79 +42,124 @@ import uk.ac.manchester.cs.owl.owlapi.OWLNaryDataRangeImpl;
 public class OntologyClassTest {
 
     @Test
-    public void example() throws OWLOntologyCreationException, OWLOntologyStorageException, FileNotFoundException {
-        //criação de uma classe utilizando a anotação
-        @OntologyClass("OntoClass")
-        class OntoClass {
-
-            @ObjectProperty
-            private Byte objectProperty;
-            @DataProperty
-            private int dataProperty;
-
-        }
-
-        //instancia da classe anotada
-        OntoClass o = new OntoClass();
-        //instanciando a anotação
-        OntologyClass a = (OntologyClass) o.getClass().getDeclaredAnnotation(OntologyClass.class);
-
+    public void example() throws OWLOntologyCreationException, OWLOntologyStorageException, FileNotFoundException, ClassNotFoundException {
+        
+        //instancis dos objetos utilizados para gerar o owl
         OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
         OWLDataFactory dataFactory = manager.getOWLDataFactory();
         IRI ontologyIRI = IRI.create("http://example.com/owlapi/ontology");
         OWLOntology ontology = manager.createOntology(ontologyIRI);
         PrefixManager prefixManager = new DefaultPrefixManager(ontologyIRI + "#");
-        if (a != null) {
+        //instancia do hashset com os nomes das classes mapeadas
+        //As classes no XML devem ser colocadas neste HashSet
+        HashSet<String> classNames = new HashSet<String>();
+        classNames.add("br.edu.ufrpe.uag.ia.motowl.examples.OntoClass");
+        classNames.add("br.edu.ufrpe.uag.ia.motowl.examples.Filho");
+        classNames.add("br.edu.ufrpe.uag.ia.motowl.examples.Idade");
 
-            OWLClass owlClass = dataFactory.getOWLClass(":" + a.value(), prefixManager);
+        //criando as OWLClass baseado no HashSet que terá os nomes das classes no XMLs
+        for (String className : classNames) {
+            //anotação para mapear a classe para a classe da owl
+            OntologyClass annotationClass = (OntologyClass) Class.forName(className).getDeclaredAnnotation(OntologyClass.class);
+            if (annotationClass != null) {
+                //pega o nome que o usuario deseja utilizar
+                String nameOWLClass = annotationClass.value().length() == 0 ? Class.forName(className).getSimpleName() : annotationClass.value();
+                OWLClass owlClass = dataFactory.getOWLClass(":" + nameOWLClass, prefixManager);
 
-            OWLDeclarationAxiom declarationAxiom = dataFactory.getOWLDeclarationAxiom(owlClass);
-
-            manager.addAxiom(ontology, declarationAxiom);
+                OWLDeclarationAxiom declarationAxiom = dataFactory.getOWLDeclarationAxiom(owlClass);
+                System.out.println(owlClass);
+                manager.addAxiom(ontology, declarationAxiom);
+            }
         }
-        
-        Field[] fields = o.getClass().getDeclaredFields();
-        for (Field field : fields) {
-            Annotation[] annotations = field.getDeclaredAnnotations();
-            for (Annotation annotation : annotations) {
-                System.out.println("Domain: " + o.getClass().getSimpleName());
-                OWLClass domainClass = dataFactory.getOWLClass(":" + o.getClass().getSimpleName(), prefixManager);
-                if (annotation instanceof ObjectProperty) {
-                    System.out.println("Range: " + field.getType().getSimpleName());
-                    OWLClass rangeClass = dataFactory.getOWLClass(":" + field.getType().getSimpleName(), prefixManager);
+        //axiomas de subclassof
+        for (String className : classNames) {
+            //anotação para a subclasse
+            SubClassOf annotationSub = (SubClassOf) Class.forName(className).getDeclaredAnnotation(SubClassOf.class);
+            
+            OntologyClass annotationClass = (OntologyClass) Class.forName(className).getDeclaredAnnotation(OntologyClass.class);
 
-                    OWLObjectProperty objectProperty = dataFactory.getOWLObjectProperty(":" + field.getName(), prefixManager);
-                    System.out.println("Object Property: " + field.getName());
+            if (annotationSub != null && annotationClass != null) {
+                //instancia de objetos owl
+                OWLClass superClass = dataFactory.getOWLClass(":" + annotationSub.value(), prefixManager);
 
-                    OWLObjectPropertyDomainAxiom domainAxiom = dataFactory.getOWLObjectPropertyDomainAxiom(objectProperty, domainClass);
-                    OWLObjectPropertyRangeAxiom rangeAxiom = dataFactory.getOWLObjectPropertyRangeAxiom(objectProperty, rangeClass);
+                String nameOWLClass = annotationClass.value().length() == 0 ? Class.forName(className).getSimpleName() : annotationClass.value();
+                OWLClass subClass = dataFactory.getOWLClass(":" + nameOWLClass, prefixManager);
+
+                OWLSubClassOfAxiom subAxiom = dataFactory.getOWLSubClassOfAxiom(subClass, superClass);
+                System.out.println(subAxiom);
+                //adiciona axioma a ontologia
+                manager.addAxiom(ontology, subAxiom);
+            }
+        }
+        //axiomas de objectProperty
+        for (String className : classNames) {
+            Field[] fields = Class.forName(className).getDeclaredFields();
+            OntologyClass annotationClass = (OntologyClass) Class.forName(className).getDeclaredAnnotation(OntologyClass.class);
+            String nameDomain = annotationClass.value().length() == 0 ? Class.forName(className).getSimpleName() : annotationClass.value();
+            //ler todos os campos da classe
+            for (Field field : fields) {
+                ObjectProperty annotationObj = (ObjectProperty) field.getDeclaredAnnotation(ObjectProperty.class);
+                if (annotationObj != null) {
+                    //se o field possui annotation de ObjectProperty então pode continuar
+                    OntologyClass annotationClassRange = (OntologyClass) Class.forName(field.getType().getName()).getDeclaredAnnotation(OntologyClass.class);
+                    String nameRange = annotationClassRange.value().length() == 0 ? Class.forName(field.getType().getName()).getSimpleName() : annotationClassRange.value();
+
+                    String objectPropertyName = annotationObj.value().length() == 0 ? field.getName() : annotationObj.value();
+                    //instancias OWL
+                    OWLClass domain = dataFactory.getOWLClass(":" + nameDomain, prefixManager);
+                    OWLClass range = dataFactory.getOWLClass(":" + nameRange, prefixManager);
+
+                    OWLObjectProperty objectProperty = dataFactory.getOWLObjectProperty(":" + objectPropertyName, prefixManager);
+                    //instancia dos axiomas
+                    OWLObjectPropertyDomainAxiom domainAxiom = dataFactory.getOWLObjectPropertyDomainAxiom(objectProperty, domain);
+                    OWLObjectPropertyRangeAxiom rangeAxiom = dataFactory.getOWLObjectPropertyRangeAxiom(objectProperty, range);
+
+                    //adiciona axiomas a ontologia
+                    AddAxiom addAxiom1 = new AddAxiom(ontology, domainAxiom);
+                    AddAxiom addAxiom2 = new AddAxiom(ontology, rangeAxiom);
+                    System.out.println(domainAxiom + "\n" + rangeAxiom);
+                    manager.applyChange(addAxiom1);
+                    manager.applyChange(addAxiom2);
+                }
+
+            }
+        }
+        //axiomas de dataProperty
+        for (String className : classNames) {
+            Field[] fields = Class.forName(className).getDeclaredFields();
+            OntologyClass annotationClass = (OntologyClass) Class.forName(className).getDeclaredAnnotation(OntologyClass.class);
+            String nameDomain = annotationClass.value().length() == 0 ? Class.forName(className).getSimpleName() : annotationClass.value();
+            for (Field field : fields) {
+                DataProperty annotationData = (DataProperty) field.getDeclaredAnnotation(DataProperty.class);
+                if (annotationData != null) {
+                    
+                    String dataPropertyName = annotationData.value().length() == 0 ? field.getName() : annotationData.value();
+                    
+                    OWLDataRange range = null;
+                    String nameRange = field.getType().getSimpleName();
+                    if(nameRange.equals("Integer") || nameRange.equals("int")){
+                        range = dataFactory.getIntegerOWLDatatype();
+                    } else if(nameRange.equals("Double") || nameRange.equals("double")){
+                        range = dataFactory.getDoubleOWLDatatype();
+                    }else if(nameRange.equals("Boolean") || nameRange.equals("boolean")){
+                        range = dataFactory.getBooleanOWLDatatype();
+                    }
+                    OWLClass domain = dataFactory.getOWLClass(":" + nameDomain, prefixManager);
+
+                    OWLDataProperty dataProperty = dataFactory.getOWLDataProperty(":" + dataPropertyName, prefixManager);
+
+                    OWLDataPropertyDomainAxiom domainAxiom = dataFactory.getOWLDataPropertyDomainAxiom(dataProperty, domain);
+                    OWLDataPropertyRangeAxiom rangeAxiom = dataFactory.getOWLDataPropertyRangeAxiom(dataProperty, range);
 
                     AddAxiom addAxiom1 = new AddAxiom(ontology, domainAxiom);
                     AddAxiom addAxiom2 = new AddAxiom(ontology, rangeAxiom);
-
+                    System.out.println(domainAxiom + "\n" + rangeAxiom);
                     manager.applyChange(addAxiom1);
                     manager.applyChange(addAxiom2);
-                } else {
-                    if (annotation instanceof DataProperty) {
-                        OWLDataProperty dataProperty = dataFactory.getOWLDataProperty(":" + field.getName(), prefixManager);
-
-                        OWLDataPropertyDomainAxiom domainAxiom = dataFactory.getOWLDataPropertyDomainAxiom(dataProperty, domainClass);
-                        OWLDataPropertyRangeAxiom rangeAxiom = dataFactory.getOWLDataPropertyRangeAxiom(dataProperty, null);
-                        
-                        AddAxiom addAxiom1 = new AddAxiom(ontology, domainAxiom);
-			AddAxiom addAxiom2 = new AddAxiom(ontology, rangeAxiom);
-			
-			manager.applyChange(addAxiom1);
-			manager.applyChange(addAxiom2);
-
-                        System.out.println("Data Property: " + field.getName());
-                    }
                 }
-            }
-            OWLOntologyFormat fmt = new OWLXMLOntologyFormat();
-            manager.saveOntology(ontology, new FileOutputStream("C:/Users/Renan/Desktop/t.owl"));
-        }
 
+            }
+        }
     }
 
 }
